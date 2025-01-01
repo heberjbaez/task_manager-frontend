@@ -3,48 +3,124 @@ import { TaskItems } from "./TaskItems"
 import { useRef, useState, useEffect } from "react"
 
 export const Task = () => {
-    const [taskList, setTaskList] = useState(localStorage.getItem("tasks") ? JSON.parse(localStorage.getItem("tasks")) : [])
+    const [taskList, setTaskList] = useState([])
     const inputRef = useRef()
 
-    const add = () => {
+    const add = async () => {
         const inputText = inputRef.current.value.trim()
         if (inputText === "") {
             return null
         }
 
         const newTask = {
-            id: Date.now(),
-            text: inputText,
-            isComplete: false
+            title: inputText,
         }
 
-        setTaskList((prev) => [...prev, newTask])
-        inputRef.current.value = ""
+        try {
+            const response = await fetch("http://localhost:3000/tasks", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(newTask)
+            })
+
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+            const createdTask = await response.json()
+
+            setTaskList((prev) => [...prev, createdTask])
+            inputRef.current.value = ""
+        } catch (error) {
+            console.error(error)
+        }
+
     }
 
-    const deleteTask = (id) => {
-        setTaskList((prevTasks) => {
-            return prevTasks.filter((task) =>
-                task.id !== id
-            )
-        })
+    const deleteTask = async (id) => {
+        const task = taskList.find((task) => task._id === id)
+        try {
+            const response = await fetch(`http://localhost:3000/tasks/${id}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(task)
+            })
+
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+
+
+            setTaskList((prevTasks) => {
+                return prevTasks.filter((task) =>
+                    task._id !== id
+                )
+            })
+
+        } catch (error) {
+            console.error(error)
+        }
+
+
+    }
+
+    //TODO, cada vez que se hace clic y se tacha el titulo, hace un movimiento raro
+    const toggle = async (id) => {
+        try {
+            const task = taskList.find((task) => task._id === id)
+
+            if (!task) {
+                throw new Error("Tarea no encontrada");
+            }
+
+            const taskCompleted = { completed: !task.completed }
+
+            const response = await fetch(`http://localhost:3000/tasks/${id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(taskCompleted)
+            })
+
+
+
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+
+            const updatedTask = await response.json()
+
+
+            setTaskList((prevTasks) => {
+                return prevTasks.map((task) => {
+                    if (task._id === id) {
+                        return { ...task, completed: !task.completed }
+                    }
+
+                    return task
+                })
+            })
+
+        } catch (error) {
+            console.error(error)
+        }
+
     }
 
     useEffect(() => {
-        localStorage.setItem("tasks", JSON.stringify(taskList))
-    }, [taskList])
+        const fetchTasks = async () => {
+            const response = await fetch('http://localhost:3000/tasks');
+            const tasks = await response.json();
+            setTaskList(tasks);
+        };
 
-    const toggle = (id) => {
-        setTaskList((prevTasks) => {
-            return prevTasks.map((task) => {
-                if (task.id === id) {
-                    return { ...task, isComplete: !task.isComplete }
-                }
+        fetchTasks();
+    }, []);
 
-                return task
-            })
-        })
-    }
 
     return (
 
@@ -68,7 +144,7 @@ export const Task = () => {
 
             <div>
                 {taskList.map((item, index) => {
-                    return <TaskItems key={index} text={item.text} id={item.id} isComplete={item.isComplete} deleteTask={deleteTask} toggle={toggle} />
+                    return <TaskItems key={index} title={item.title} id={item._id} completed={item.completed} deleteTask={deleteTask} toggle={toggle} />
                 })}
 
             </div>
